@@ -10,6 +10,7 @@ class Settings(BaseSettings):
     SIMULATOR_MODE: bool = True
     SIMULATOR_INTERVAL_SECONDS: float = 3.0
     SECRET_KEY: str = "change_me_in_production"
+    SUPERADMIN_PASSWORD: str = "change_me"
     CORS_ORIGINS: str = '["http://localhost:8081","http://localhost:19006"]'
 
     @property

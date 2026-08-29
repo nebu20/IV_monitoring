@@ -17,3 +17,4 @@ web-build/
 .DS_Store
 .vscode/
 *.log
+backend/.env

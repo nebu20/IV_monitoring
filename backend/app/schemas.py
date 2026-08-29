@@ -24,6 +24,7 @@ class IVRegisterRequest(BaseModel):
     bag_size_ml: float = Field(..., gt=0, example=1000.0)
     prescribed_rate_gtt_min: float = Field(..., gt=0, example=30.0)
     sensor_id: str = Field(..., example="SENS-104")
+    card_id: Optional[str] = Field(None, example="MRN-10042")  # for ward validation
 
 
 class AcknowledgeRequest(BaseModel):

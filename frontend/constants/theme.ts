@@ -1,77 +1,138 @@
 /**
- * Clinical Dark Mode Design System
- * Strict high-contrast colour coding:
- *   Green  → NORMAL
- *   Amber  → ADVISORY / LOW priority
- *   Red    → CRITICAL / HIGH priority
- *   Grey   → Offline / Stale
+ * Clinical Design System — Dark & Light themes
+ * Status colours stay the same in both modes (clinical standard).
+ * Only backgrounds, surfaces, text, and borders switch.
  */
 
-export const Colors = {
-  // Backgrounds
+// ── Shared status colours (never change between themes) ───────────────────────
+export const StatusColors = {
+  normal:         '#22c55e',
+  normalBg_dark:  '#052e16',
+  normalBg_light: '#dcfce7',
+  normalBorder:   '#166534',
+
+  advisory:         '#f59e0b',
+  advisoryBg_dark:  '#451a03',
+  advisoryBg_light: '#fef3c7',
+  advisoryBorder:   '#92400e',
+
+  critical:         '#ef4444',
+  criticalBg_dark:  '#450a0a',
+  criticalBg_light: '#fee2e2',
+  criticalBorder:   '#991b1b',
+
+  high:         '#f97316',
+  highBg_dark:  '#431407',
+  highBg_light: '#ffedd5',
+  highBorder:   '#9a3412',
+
+  anomaly:         '#a78bfa',
+  anomalyBg_dark:  '#2e1065',
+  anomalyBg_light: '#ede9fe',
+  anomalyBorder:   '#5b21b6',
+};
+
+// ── Dark theme ────────────────────────────────────────────────────────────────
+export const DarkTheme = {
+  mode: 'dark' as const,
+
   bg: {
-    primary:   '#0f172a',   // slate-900
-    secondary: '#1e293b',   // slate-800
+    primary:   '#0f172a',
+    secondary: '#1e293b',
     card:      '#1e293b',
-    input:     '#334155',   // slate-700
+    input:     '#334155',
     modal:     '#1e293b',
   },
-
-  // Text
   text: {
-    primary:   '#f1f5f9',   // slate-100
-    secondary: '#94a3b8',   // slate-400
-    muted:     '#475569',   // slate-600
+    primary:   '#f1f5f9',
+    secondary: '#94a3b8',
+    muted:     '#475569',
     inverse:   '#0f172a',
   },
-
-  // Status colours
   status: {
-    normal:       '#22c55e',   // green-500
-    normalBg:     '#052e16',   // green-950
-    normalBorder: '#166534',   // green-800
-
-    advisory:       '#f59e0b',   // amber-500
-    advisoryBg:     '#451a03',   // amber-950
-    advisoryBorder: '#92400e',   // amber-800
-
-    critical:       '#ef4444',   // red-500
-    criticalBg:     '#450a0a',   // red-950
-    criticalBorder: '#991b1b',   // red-800
-
-    high:           '#f97316',   // orange-500
-    highBg:         '#431407',   // orange-950
-    highBorder:     '#9a3412',   // orange-800
-
-    anomaly:        '#a78bfa',   // violet-400
-    anomalyBg:      '#2e1065',   // violet-950
-    anomalyBorder:  '#5b21b6',   // violet-800
-
-    offline:        '#475569',   // slate-600
+    normal:       StatusColors.normal,
+    normalBg:     StatusColors.normalBg_dark,
+    normalBorder: StatusColors.normalBorder,
+    advisory:       StatusColors.advisory,
+    advisoryBg:     StatusColors.advisoryBg_dark,
+    advisoryBorder: StatusColors.advisoryBorder,
+    critical:       StatusColors.critical,
+    criticalBg:     StatusColors.criticalBg_dark,
+    criticalBorder: StatusColors.criticalBorder,
+    high:       StatusColors.high,
+    highBg:     StatusColors.highBg_dark,
+    highBorder: StatusColors.highBorder,
+    anomaly:       StatusColors.anomaly,
+    anomalyBg:     StatusColors.anomalyBg_dark,
+    anomalyBorder: StatusColors.anomalyBorder,
+    offline:        '#475569',
     offlineBg:      '#0f172a',
     offlineBorder:  '#334155',
   },
-
-  // Priority flash colours for alarm banner
-  alarmBg:     '#7f1d1d',   // red-900
-  alarmText:   '#fca5a5',   // red-300
+  alarmBg:     '#7f1d1d',
+  alarmText:   '#fca5a5',
   alarmBorder: '#ef4444',
-
-  // Borders
-  border: '#334155',         // slate-700
+  border:      '#334155',
   borderLight: '#1e293b',
-
-  // Interactive
-  accent:       '#3b82f6',   // blue-500
-  accentDark:   '#1d4ed8',   // blue-700
-  accentMuted:  '#1e3a5f',
-
+  accent:      '#3b82f6',
+  accentDark:  '#1d4ed8',
+  accentMuted: '#1e3a5f',
   white: '#ffffff',
   black: '#000000',
 };
 
+// ── Light theme ───────────────────────────────────────────────────────────────
+export const LightTheme = {
+  mode: 'light' as const,
+
+  bg: {
+    primary:   '#f1f5f9',
+    secondary: '#ffffff',
+    card:      '#ffffff',
+    input:     '#e2e8f0',
+    modal:     '#ffffff',
+  },
+  text: {
+    primary:   '#0f172a',
+    secondary: '#334155',
+    muted:     '#94a3b8',
+    inverse:   '#ffffff',
+  },
+  status: {
+    normal:       '#16a34a',
+    normalBg:     StatusColors.normalBg_light,
+    normalBorder: '#86efac',
+    advisory:       '#d97706',
+    advisoryBg:     StatusColors.advisoryBg_light,
+    advisoryBorder: '#fcd34d',
+    critical:       '#dc2626',
+    criticalBg:     StatusColors.criticalBg_light,
+    criticalBorder: '#fca5a5',
+    high:       '#ea580c',
+    highBg:     StatusColors.highBg_light,
+    highBorder: '#fdba74',
+    anomaly:       '#7c3aed',
+    anomalyBg:     StatusColors.anomalyBg_light,
+    anomalyBorder: '#c4b5fd',
+    offline:        '#94a3b8',
+    offlineBg:      '#f1f5f9',
+    offlineBorder:  '#cbd5e1',
+  },
+  alarmBg:     '#fee2e2',
+  alarmText:   '#991b1b',
+  alarmBorder: '#ef4444',
+  border:      '#e2e8f0',
+  borderLight: '#f1f5f9',
+  accent:      '#2563eb',
+  accentDark:  '#1d4ed8',
+  accentMuted: '#dbeafe',
+  white: '#ffffff',
+  black: '#000000',
+};
+
+export type Theme = typeof DarkTheme;
+
 export const Typography = {
-  // Font sizes (clinical — large and readable)
   xs:   11,
   sm:   13,
   base: 15,

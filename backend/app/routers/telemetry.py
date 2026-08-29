@@ -58,7 +58,7 @@ async def ingest_telemetry(
         prescribed_rate_gtt_min=meta.prescribed_rate_gtt_min,
     )
 
-    ts = datetime.fromtimestamp(payload.timestamp, tz=timezone.utc)
+    ts = datetime.fromtimestamp(payload.timestamp, tz=timezone.utc).replace(tzinfo=None)
 
     # 3. Persist to telemetry_logs
     log = TelemetryLog(
