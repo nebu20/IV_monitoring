@@ -53,6 +53,7 @@ def _extract_ward(room_bed: str) -> str:
 async def register_iv(
     body: IVRegisterRequest,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     # ── Ward Mismatch Validation ──────────────────────────────────────────────
     # If the patient has a card_id, look up their registered ward and compare
@@ -132,7 +133,14 @@ async def register_iv(
 async def acknowledge_alarm_endpoint(
     body: AcknowledgeRequest,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
+    """
+    Acknowledge an active alarm for an IV line.
+    Access rules:
+      - Nurse: may only acknowledge alarms on beds assigned to them.
+      - Admin / Superadmin: may acknowledge any alarm.
+    """
     sensor_id = None
 
     # Try DB first
@@ -142,10 +150,25 @@ async def acknowledge_alarm_endpoint(
         )
         meta = result.scalars().first()
         if meta:
+            # Ward access check for Nurses
+            if current_user.role == "Nurse":
+                assigned = current_user.assigned_beds or []
+                if meta.room_bed not in assigned:
+                    raise HTTPException(
+                        status_code=status.HTTP_403_FORBIDDEN,
+                        detail=f"Access denied: bed '{meta.room_bed}' is not assigned to you.",
+                    )
             sensor_id = meta.sensor_id
-            event = IVEvent(event_type="ALERT_ACKNOWLEDGED", iv_id=body.iv_id, nurse_notes=body.nurse_notes)
+            event = IVEvent(
+                event_type="ALERT_ACKNOWLEDGED",
+                iv_id=body.iv_id,
+                nurse_notes=body.nurse_notes,
+                performed_by=current_user.username,
+            )
             db.add(event)
             await db.commit()
+    except HTTPException:
+        raise
     except Exception as exc:
         logger.debug("DB unavailable for acknowledge (%s) — using in-memory fallback.", exc)
 
@@ -156,6 +179,14 @@ async def acknowledge_alarm_endpoint(
         live = next((s for s in cache.values() if s.get("iv_id") == body.iv_id), None)
         if live is None:
             raise HTTPException(status_code=404, detail=f"IV {body.iv_id} not found")
+        # Ward access check against in-memory state
+        if current_user.role == "Nurse":
+            assigned = current_user.assigned_beds or []
+            if live.get("room_bed") not in assigned:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail=f"Access denied: bed '{live.get('room_bed')}' is not assigned to you.",
+                )
         sensor_id = live["sensor_id"]
 
     acknowledge_alarm(sensor_id)
@@ -172,7 +203,14 @@ async def acknowledge_alarm_endpoint(
 async def confirm_new_bag(
     body: NewBagRequest,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
+    """
+    Confirm a bag replacement and reset the fusion-engine volume state.
+    Access rules:
+      - Nurse: may only confirm bag changes on beds assigned to them.
+      - Admin / Superadmin: may confirm any bag change.
+    """
     sensor_id = None
 
     try:
@@ -181,6 +219,14 @@ async def confirm_new_bag(
         )
         meta = result.scalars().first()
         if meta:
+            # Ward access check for Nurses
+            if current_user.role == "Nurse":
+                assigned = current_user.assigned_beds or []
+                if meta.room_bed not in assigned:
+                    raise HTTPException(
+                        status_code=status.HTTP_403_FORBIDDEN,
+                        detail=f"Access denied: bed '{meta.room_bed}' is not assigned to you.",
+                    )
             sensor_id = meta.sensor_id
             meta.bag_size_ml = body.new_bag_size_ml
             meta.updated_at = datetime.now(tz=timezone.utc)
@@ -188,9 +234,12 @@ async def confirm_new_bag(
                 event_type="BAG_REPLACEMENT",
                 iv_id=body.iv_id,
                 nurse_notes=body.nurse_notes or f"New {body.new_bag_size_ml}mL bag confirmed.",
+                performed_by=current_user.username,
             )
             db.add(event)
             await db.commit()
+    except HTTPException:
+        raise
     except Exception as exc:
         logger.debug("DB unavailable for new-bag (%s) — using in-memory fallback.", exc)
 
@@ -201,8 +250,15 @@ async def confirm_new_bag(
         live = next((s for s in cache.values() if s.get("iv_id") == body.iv_id), None)
         if live is None:
             raise HTTPException(status_code=404, detail=f"IV {body.iv_id} not found")
+        # Ward access check against in-memory state
+        if current_user.role == "Nurse":
+            assigned = current_user.assigned_beds or []
+            if live.get("room_bed") not in assigned:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail=f"Access denied: bed '{live.get('room_bed')}' is not assigned to you.",
+                )
         sensor_id = live["sensor_id"]
-
         # Update bag size in the in-memory cache directly
         live["bag_size_ml"] = body.new_bag_size_ml
 

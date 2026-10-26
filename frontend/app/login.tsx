@@ -43,7 +43,7 @@ export default function LoginScreen() {
               <Ionicons name="water" size={36} color={theme.accent} />
             </View>
           </View>
-          <Text style={[styles.title, { color: theme.text.primary }]}>IV Monitor</Text>
+          <Text style={[styles.title, { color: theme.text.primary }]}>MediGuard</Text>
           <Text style={[styles.subtitle, { color: theme.text.secondary }]}>
             Central Nurse Station — Sign In
           </Text>

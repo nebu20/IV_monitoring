@@ -74,7 +74,7 @@ async def lifespan(app: FastAPI):
 
 def create_app() -> FastAPI:
     app = FastAPI(
-        title="Smart IV Fluid Monitoring System",
+        title="MediGuard — Smart IV Fluid Monitoring System",
         version="1.0.0",
         docs_url="/docs",
         redoc_url="/redoc",

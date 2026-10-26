@@ -117,12 +117,12 @@ function AppNavigator() {
         }}
       >
         <Stack.Screen name="login" options={{ headerShown: false }} />
-        <Stack.Screen name="index" options={{ title: 'IV Monitor — Central Station' }} />
+        <Stack.Screen name="index" options={{ title: 'MediGuard — Central Station' }} />
         <Stack.Screen name="register" options={{ title: 'Register IV Line', presentation: 'modal' }} />
         <Stack.Screen name="start-iv" options={{ headerShown: false }} />
         <Stack.Screen name="sessions" options={{ headerShown: false }} />
         <Stack.Screen name="profile" options={{ headerShown: false }} />
-        <Stack.Screen name="admin/index" options={{ title: 'Admin — System Overview' }} />
+        <Stack.Screen name="admin/index" options={{ title: 'MediGuard Admin — System Overview' }} />
         <Stack.Screen name="details/[ivId]" options={{ headerShown: false }} />
       </Stack>
     </>
