@@ -149,7 +149,7 @@ async def seed_data(db_session: AsyncSession):
 
 
 def _token(username: str, role: str) -> str:
-    return create_access_token({"sub": username, "role": role})
+    return create_access_token({"sub": username, "role": role, "tv": 1})
 
 
 @pytest_asyncio.fixture(scope="session")

@@ -15,6 +15,8 @@ from collections import deque
 from dataclasses import dataclass, field
 from typing import Deque, Dict, Optional
 
+from app.config import settings
+
 # ── Constants ──────────────────────────────────────────────────────────────────
 
 DRIP_MOVING_AVG_WINDOW = 8          # samples for smoothed drip-rate filter
@@ -23,6 +25,7 @@ DROP_FACTOR_GTT_PER_ML = 20.0       # standard IV set: 20 gtt / mL
 EMPTY_BAG_THRESHOLD_GRAMS = 20.0    # tare weight of empty bag
 ZERO_FLOW_TIMEOUT_SECS = 15.0       # seconds of zero drops before "No Flow" alarm
 RAPID_DRAIN_RATE = 5.0              # mL/min above which drain is "rapid"
+DEVIATION_THRESHOLD_PERCENT = settings.DEVIATION_THRESHOLD_PERCENT  # ±25% default
 
 
 # ── Flow / Alarm Status Enumerations ──────────────────────────────────────────
@@ -125,6 +128,7 @@ def process_payload(
         volume_ml=volume_ml,
         drip_rate_gtt_min=drip_rate_gtt_min,
         drain_rate_ml_per_min=drain_rate_ml_per_min,
+        prescribed_rate_gtt_min=prescribed_rate_gtt_min,
         state=state,
         now=now,
     )
@@ -208,6 +212,7 @@ def _classify_status(
     volume_ml: float,
     drip_rate_gtt_min: float,
     drain_rate_ml_per_min: float,
+    prescribed_rate_gtt_min: float,
     state: SensorState,
     now: float,
 ) -> str:
@@ -231,6 +236,16 @@ def _classify_status(
     # Weight present but sustained zero drops (>15s)
     if volume_ml > 5.0 and zero_flow_duration > ZERO_FLOW_TIMEOUT_SECS:
         return FlowStatus.CRITICAL
+
+    # Prescribed-rate deviation (only when flow is active, bag has fluid,
+    # and a valid prescribed rate was provided). Placed after the critical
+    # safety checks so empty-bag, no-flow, and line-discrepancy always take
+    # priority. Returns ADVISORY — the persistence filter (>3s) prevents
+    # alarm fatigue from transient sensor noise.
+    if drip_rate_gtt_min >= 1.0 and volume_ml > 5.0 and prescribed_rate_gtt_min > 0:
+        deviation = abs(drip_rate_gtt_min - prescribed_rate_gtt_min) / prescribed_rate_gtt_min
+        if deviation > DEVIATION_THRESHOLD_PERCENT:
+            return FlowStatus.ADVISORY
 
     # Normal flow: weight decreasing with detected drops
     if drip_rate_gtt_min >= 1.0 and volume_ml > 5.0:

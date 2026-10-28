@@ -15,11 +15,12 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
-from app.database import create_tables
+from app.database import create_tables, run_column_migrations
 from app.routers import telemetry, iv_management, websocket as ws_router
 from app.routers import auth as auth_router, patients as patients_router, node as node_router
 from app.routers.auth import profile_router
 from app.routers.staff import router as staff_router, seed_mock_staff
+from app.routers.medications import router as medications_router
 from app.simulator import MOCK_BEDS, run_simulator
 
 logging.basicConfig(
@@ -39,6 +40,7 @@ async def lifespan(app: FastAPI):
 
     try:
         await create_tables()
+        await run_column_migrations()
         _db_available = True
         logger.info("Database tables ready.")
     except Exception as exc:
@@ -98,6 +100,7 @@ def create_app() -> FastAPI:
     app.include_router(patients_router.router)
     app.include_router(node_router.router)
     app.include_router(staff_router)
+    app.include_router(medications_router)
 
     @app.get("/health", tags=["Health"])
     async def health_check():

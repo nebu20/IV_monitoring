@@ -27,6 +27,10 @@ interface NurseUser {
   license_id?: string;
   assigned_ward?: string;
   assigned_beds: string[];
+  active?: boolean;
+  deactivated_by?: string;
+  deactivated_at?: string;
+  deactivation_reason?: string;
 }
 
 export default function AdminDashboard() {
@@ -89,9 +93,13 @@ export default function AdminDashboard() {
   };
 
   const fetchNurses = useCallback(async () => {
-    const res = await fetch(`${BASE_URL}/api/auth/users`, { headers: authHeader });
+    // Superadmin sees all users (including deactivated); Admin sees active only
+    const endpoint = user?.role === 'Superadmin'
+      ? `${BASE_URL}/api/auth/users/all`
+      : `${BASE_URL}/api/auth/users`;
+    const res = await fetch(endpoint, { headers: authHeader });
     if (res.ok) setNurses(await res.json());
-  }, []);
+  }, [user?.role]);
 
   const loadAll = async () => {
     setLoading(true);
@@ -180,6 +188,87 @@ export default function AdminDashboard() {
     if (res.ok) {
       await fetchNurses();
       Alert.alert('Updated', 'Bed assignments saved.');
+    }
+  };
+
+  const deactivateUser = async (userId: number, username: string) => {
+    Alert.alert(
+      '⚠️ Deactivate Account',
+      `Are you sure you want to deactivate ${username}? They will immediately lose all system access. Their historical records will be preserved.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Deactivate',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const res = await fetch(`${BASE_URL}/api/auth/users/${userId}/deactivate`, {
+                method: 'PUT',
+                headers: { ...authHeader, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ reason: 'Deactivated by superadmin' }),
+              });
+              if (res.ok) {
+                await fetchNurses();
+                Alert.alert('✅ Deactivated', `${username} has been deactivated.`);
+              } else {
+                const e = await res.json();
+                Alert.alert('Error', e.detail ?? 'Could not deactivate account');
+              }
+            } catch {
+              Alert.alert('Error', 'Network error');
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const reactivateUser = async (userId: number, username: string) => {
+    Alert.alert(
+      'Reactivate Account',
+      `Reactivate ${username}? They will need to log in again.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Reactivate',
+          onPress: async () => {
+            try {
+              const res = await fetch(`${BASE_URL}/api/auth/users/${userId}/reactivate`, {
+                method: 'PUT',
+                headers: { ...authHeader, 'Content-Type': 'application/json' },
+              });
+              if (res.ok) {
+                await fetchNurses();
+                Alert.alert('✅ Reactivated', `${username} has been reactivated.`);
+              } else {
+                const e = await res.json();
+                Alert.alert('Error', e.detail ?? 'Could not reactivate account');
+              }
+            } catch {
+              Alert.alert('Error', 'Network error');
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const changeRole = async (userId: number, username: string, newRole: string) => {
+    try {
+      const res = await fetch(`${BASE_URL}/api/auth/users/${userId}/role`, {
+        method: 'PUT',
+        headers: { ...authHeader, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ role: newRole }),
+      });
+      if (res.ok) {
+        await fetchNurses();
+        Alert.alert('✅ Role Changed', `${username} is now a ${newRole}. Their existing sessions have been invalidated.`);
+      } else {
+        const e = await res.json();
+        Alert.alert('Error', e.detail ?? 'Could not change role');
+      }
+    } catch {
+      Alert.alert('Error', 'Network error');
     }
   };
 
@@ -446,7 +535,17 @@ export default function AdminDashboard() {
             {/* Existing accounts */}
             <SectionHeader theme={theme} icon="people-outline" title={`Accounts (${nurses.length})`} />
             {nurses.map((n) => (
-              <NurseCard key={n.id} nurse={n} theme={theme} onUpdateBeds={(beds) => updateBeds(n.id, beds)} />
+              <NurseCard
+                key={n.id}
+                nurse={n}
+                theme={theme}
+                onUpdateBeds={(beds) => updateBeds(n.id, beds)}
+                onDeactivate={user?.role === 'Superadmin' ? deactivateUser : undefined}
+                onReactivate={user?.role === 'Superadmin' ? reactivateUser : undefined}
+                onRoleChange={user?.role === 'Superadmin' ? changeRole : undefined}
+                isSuperadmin={user?.role === 'Superadmin'}
+                currentUsername={user?.username ?? ''}
+              />
             ))}
           </>
         )}
@@ -553,11 +652,22 @@ function SectionHeader({ icon, title, theme }: { icon: string; title: string; th
   );
 }
 
-function NurseCard({ nurse, theme, onUpdateBeds }: {
-  nurse: NurseUser; theme: any; onUpdateBeds: (b: string) => void
+function NurseCard({ nurse, theme, onUpdateBeds, onDeactivate, onReactivate, onRoleChange, isSuperadmin, currentUsername }: {
+  nurse: NurseUser; theme: any; onUpdateBeds: (b: string) => void;
+  onDeactivate?: (id: number, username: string) => void;
+  onReactivate?: (id: number, username: string) => void;
+  onRoleChange?: (id: number, username: string, role: string) => void;
+  isSuperadmin: boolean;
+  currentUsername: string;
 }) {
   const [editing, setEditing] = useState(false);
   const [beds, setBeds] = useState(nurse.assigned_beds.join(', '));
+  const [showRoleSelect, setShowRoleSelect] = useState(false);
+
+  const isActive = nurse.active !== false;
+  const isSelf = nurse.username === currentUsername;
+  const isTargetSuperadmin = nurse.role === 'Superadmin';
+  const canManage = isSuperadmin && !isSelf && !isTargetSuperadmin;
 
   const roleLabel = nurse.role === 'Admin' ? 'Admin' : nurse.role === 'Superadmin' ? 'Superadmin' : 'Nurse';
   const roleColor = nurse.role === 'Superadmin'
@@ -571,7 +681,11 @@ function NurseCard({ nurse, theme, onUpdateBeds }: {
       ? theme.accentMuted
       : theme.status.normalBg;
 
-  // Build enhanced display line: [Badge: Nurse] Almaz Kebede (ID: STF-2024-001 | Lic: RN-88492) — Ward 2A
+  const statusColor = isActive ? theme.status.normal : theme.status.critical;
+  const statusBg = isActive ? theme.status.normalBg : theme.status.criticalBg;
+  const statusLabel = isActive ? 'Active' : 'Deactivated';
+
+  // Build enhanced display line
   const buildDisplayLine = () => {
     const namePart = nurse.full_name ?? nurse.username;
     const idPart = nurse.staff_id ? `ID: ${nurse.staff_id}` : null;
@@ -582,7 +696,7 @@ function NurseCard({ nurse, theme, onUpdateBeds }: {
   };
 
   return (
-    <View style={[styles.card, { backgroundColor: theme.bg.card, borderColor: theme.border }]}>
+    <View style={[styles.card, { backgroundColor: theme.bg.card, borderColor: theme.border, opacity: isActive ? 1 : 0.7 }]}>
       <View style={styles.nurseRow}>
         {/* Role badge */}
         <View style={[styles.roleChip, { backgroundColor: roleBg }]}>
@@ -596,6 +710,14 @@ function NurseCard({ nurse, theme, onUpdateBeds }: {
           </Text>
         </View>
 
+        {/* Account status badge */}
+        <View style={[styles.roleChip, { backgroundColor: statusBg }]}>
+          <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: statusColor }} />
+          <Text style={[styles.roleChipText, { color: statusColor, fontSize: 10 }]}>
+            {statusLabel}
+          </Text>
+        </View>
+
         {/* Main info */}
         <View style={{ flex: 1 }}>
           <Text style={[styles.nurseUsername, { color: theme.text.primary }]}>{nurse.username}</Text>
@@ -605,8 +727,19 @@ function NurseCard({ nurse, theme, onUpdateBeds }: {
         </View>
       </View>
 
-      {/* Bed assignments — only for Nurses */}
-      {nurse.role === 'Nurse' && (
+      {/* Deactivation info */}
+      {!isActive && nurse.deactivated_at && (
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 2 }}>
+          <Ionicons name="time-outline" size={11} color={theme.text.muted} />
+          <Text style={{ fontSize: 10, color: theme.text.muted }}>
+            Deactivated by {nurse.deactivated_by ?? '—'} on {new Date(nurse.deactivated_at).toLocaleDateString()}
+            {nurse.deactivation_reason ? ` · ${nurse.deactivation_reason}` : ''}
+          </Text>
+        </View>
+      )}
+
+      {/* Bed assignments — only for active Nurses */}
+      {nurse.role === 'Nurse' && isActive && (
         editing ? (
           <View style={styles.bedsEditRow}>
             <TextInput
@@ -641,6 +774,62 @@ function NurseCard({ nurse, theme, onUpdateBeds }: {
             <Ionicons name="pencil-outline" size={13} color={theme.text.muted} />
           </TouchableOpacity>
         )
+      )}
+
+      {/* Superadmin management actions */}
+      {canManage && (
+        <View style={{ flexDirection: 'row', gap: 5, flexWrap: 'wrap', marginTop: 4 }}>
+          {/* Role change — only between Nurse and Admin */}
+          {showRoleSelect ? (
+            <View style={{ flexDirection: 'row', gap: 5, alignItems: 'center' }}>
+              <Text style={{ fontSize: 11, color: theme.text.secondary }}>Role:</Text>
+              {(['Nurse', 'Admin'] as const).map((r) => (
+                <TouchableOpacity
+                  key={r}
+                  style={[styles.roleChip, {
+                    borderColor: nurse.role === r ? theme.accent : theme.border,
+                    backgroundColor: nurse.role === r ? theme.accentMuted : theme.bg.input,
+                  }]}
+                  onPress={() => { onRoleChange?.(nurse.id, nurse.username, r); setShowRoleSelect(false); }}
+                >
+                  <Text style={{ fontSize: 10, fontWeight: '700', color: nurse.role === r ? theme.accent : theme.text.secondary }}>
+                    {r}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+              <TouchableOpacity onPress={() => setShowRoleSelect(false)}>
+                <Ionicons name="close-circle-outline" size={18} color={theme.text.muted} />
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <TouchableOpacity
+              style={[styles.btn, { borderColor: theme.accent, backgroundColor: theme.accentMuted }]}
+              onPress={() => setShowRoleSelect(true)}
+            >
+              <Ionicons name="swap-horizontal-outline" size={13} color={theme.accent} />
+              <Text style={{ fontSize: 11, fontWeight: '600', color: theme.accent }}>Change Role</Text>
+            </TouchableOpacity>
+          )}
+
+          {/* Deactivate / Reactivate */}
+          {isActive ? (
+            <TouchableOpacity
+              style={[styles.btn, { borderColor: theme.status.criticalBorder, backgroundColor: theme.status.criticalBg }]}
+              onPress={() => onDeactivate?.(nurse.id, nurse.username)}
+            >
+              <Ionicons name="person-remove-outline" size={13} color={theme.status.critical} />
+              <Text style={{ fontSize: 11, fontWeight: '600', color: theme.status.critical }}>Deactivate</Text>
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity
+              style={[styles.btn, { borderColor: theme.status.normalBorder, backgroundColor: theme.status.normalBg }]}
+              onPress={() => onReactivate?.(nurse.id, nurse.username)}
+            >
+              <Ionicons name="person-add-outline" size={13} color={theme.status.normal} />
+              <Text style={{ fontSize: 11, fontWeight: '600', color: theme.status.normal }}>Reactivate</Text>
+            </TouchableOpacity>
+          )}
+        </View>
       )}
     </View>
   );
@@ -742,6 +931,7 @@ const styles = StyleSheet.create({
   },
   saveBtn: { paddingHorizontal: Spacing.md, paddingVertical: 5, borderRadius: Radius.sm },
   saveBtnText: { fontSize: Typography.xs, fontWeight: '700' },
+  btn: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8, paddingVertical: 4, borderRadius: Radius.sm, borderWidth: 1, gap: 3 },
 
   widgetHeader: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
   widgetTitle: { flex: 1, fontSize: Typography.base, fontWeight: '700' },

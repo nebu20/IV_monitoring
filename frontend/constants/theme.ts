@@ -130,7 +130,7 @@ export const LightTheme = {
   black: '#000000',
 };
 
-export type Theme = typeof DarkTheme;
+export type Theme = typeof DarkTheme | typeof LightTheme;
 
 export const Typography = {
   xs:   11,

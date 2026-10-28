@@ -13,6 +13,11 @@ class Settings(BaseSettings):
     SUPERADMIN_PASSWORD: str = "change_me"
     CORS_ORIGINS: str = '["http://localhost:8081","http://localhost:19006"]'
 
+    # ── Fusion Engine ────────────────────────────────────────────────────────
+    # Tolerance for prescribed-rate deviation before an ADVISORY alarm is raised.
+    # 0.25 = ±25%. Set via DEVIATION_THRESHOLD_PERCENT env var.
+    DEVIATION_THRESHOLD_PERCENT: float = 0.25
+
     @property
     def cors_origins_list(self) -> List[str]:
         try:

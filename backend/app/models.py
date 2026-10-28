@@ -3,7 +3,7 @@
 from datetime import datetime
 from sqlalchemy import (
     Column, String, Float, Integer, DateTime, Text,
-    ForeignKey, Boolean, JSON
+    ForeignKey, Boolean, JSON, UniqueConstraint
 )
 from sqlalchemy.orm import relationship
 from app.database import Base
@@ -24,6 +24,17 @@ class User(Base):
     assigned_beds = Column(JSON, default=list)
     active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)
+    # ── Security columns (added Phase 1 hardening) ────────────────────────────
+    # Increment on password reset or any forced credential rotation; JWT must
+    # carry the matching version to be accepted.
+    token_version = Column(Integer, default=1, nullable=False, server_default="1")
+    # Set True when a superadmin resets a password. User must change the
+    # temporary password before accessing normal application features.
+    must_change_password = Column(Boolean, default=False, nullable=False, server_default="false")
+    # ── Deactivation audit (Phase 2) ──────────────────────────────────────────
+    deactivated_by = Column(String(64), nullable=True)
+    deactivated_at = Column(DateTime, nullable=True)
+    deactivation_reason = Column(Text, nullable=True)
 
 
 class HRStaffRecord(Base):
@@ -146,3 +157,86 @@ class IVSessionHistory(Base):
     released_by = Column(String(64), nullable=True)   # username of nurse
     notes = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Medication Reminder System (Phase 1)
+# ══════════════════════════════════════════════════════════════════════════════
+
+class MedicationSchedule(Base):
+    """
+    A prescribed medication schedule for a patient.
+    Created by an authorised staff member (Admin or Superadmin).
+    The card_id links to the existing CardRoomPatient record — no duplicate
+    patient table is created.
+    """
+    __tablename__ = "medication_schedules"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    card_id = Column(String(64), ForeignKey("card_room_patients.card_id"),
+                     nullable=False, index=True)
+    medication_name = Column(String(128), nullable=False)
+    dose = Column(String(64), nullable=False)          # e.g. "500 mg"
+    route = Column(String(32), nullable=False, default="PO")  # PO | IV | IM | SC | TOP
+    frequency = Column(String(64), nullable=False)     # e.g. "BID", "TID", "Q8H"
+    scheduled_times = Column(JSON, default=list)       # ["08:00", "20:00"]
+    start_date = Column(DateTime, nullable=False)
+    end_date = Column(DateTime, nullable=True)         # null = ongoing
+    instructions = Column(Text, nullable=True)        # verified-by-staff instructions
+    active = Column(Boolean, default=True, nullable=False)
+    created_by = Column(String(64), nullable=False)    # username of creating staff
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    doses = relationship("DoseRecord", back_populates="schedule",
+                         cascade="all, delete-orphan")
+
+
+class DoseRecord(Base):
+    """
+    Tracks individual dose administration / reminder status.
+    A DoseRecord is created on-demand when a staff member acknowledges a
+    reminder or records an administration event.
+
+    Status lifecycle:
+      PENDING   → dose slot computed by the system, no action taken yet
+      GIVEN     → staff recorded that the dose was administered
+      DELAYED   → staff recorded a delay (with reason)
+      REFUSED   → patient refused the dose (with reason)
+      NOT_GIVEN → dose was not given (with reason)
+
+    Acknowledgement is separate from administration: a nurse can
+    acknowledge a reminder (silence the alert) without recording
+    that the medicine was taken.
+    """
+    __tablename__ = "dose_records"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    schedule_id = Column(Integer, ForeignKey("medication_schedules.id"),
+                         nullable=False, index=True)
+    scheduled_datetime = Column(DateTime, nullable=False, index=True)
+    status = Column(String(16), nullable=False, default="PENDING")
+    # PENDING | GIVEN | DELAYED | REFUSED | NOT_GIVEN
+
+    # Administration details (filled when status changes from PENDING)
+    administered_by = Column(String(64), nullable=True)
+    administered_at = Column(DateTime, nullable=True)
+    reason = Column(Text, nullable=True)    # for DELAYED | REFUSED | NOT_GIVEN
+    notes = Column(Text, nullable=True)
+
+    # Reminder acknowledgement (separate from administration)
+    acknowledged_by = Column(String(64), nullable=True)
+    acknowledged_at = Column(DateTime, nullable=True)
+
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    schedule = relationship("MedicationSchedule", back_populates="doses")
+
+    __table_args__ = (
+        # One record per (schedule, scheduled time slot) — prevents duplicate
+        # dose records from concurrent ensure_dose_record calls.
+        UniqueConstraint(
+            "schedule_id", "scheduled_datetime",
+            name="uq_dose_schedule_datetime",
+        ),
+    )

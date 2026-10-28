@@ -121,6 +121,36 @@ export default function DetailsScreen() {
               <DiagCard theme={theme} label="Volume" value={`${liveState.volume_ml.toFixed(0)} mL`} icon="beaker-outline" color={theme.status.advisory} />
               <DiagCard theme={theme} label="ETA" value={liveState.eta_string} icon="time-outline"
                 color={liveState.eta_string === 'ETA Unavailable' ? theme.status.critical : theme.status.normal} />
+              {liveState.battery_level != null && (
+                <DiagCard
+                  theme={theme}
+                  label="Power"
+                  value={liveState.power_source === 'BATTERY' ? `BAT ${liveState.battery_level}%` : 'AC Grid'}
+                  icon={
+                    liveState.power_source === 'BATTERY' && liveState.battery_level < 15
+                      ? 'battery-dead-outline'
+                      : liveState.power_source === 'BATTERY'
+                      ? 'battery-half-outline'
+                      : 'battery-charging-outline'
+                  }
+                  color={
+                    liveState.power_source === 'BATTERY' && liveState.battery_level < 15
+                      ? theme.status.critical
+                      : liveState.power_source === 'BATTERY'
+                      ? theme.status.advisory
+                      : theme.status.normal
+                  }
+                />
+              )}
+              {liveState.node_status && liveState.node_status !== 'OK' && (
+                <DiagCard
+                  theme={theme}
+                  label="Node Status"
+                  value={liveState.node_status}
+                  icon="warning-outline"
+                  color={theme.status.critical}
+                />
+              )}
             </View>
             <View style={[styles.card, { backgroundColor: theme.bg.card, borderColor: theme.border }]}>
               <VolumeBar percentage={liveState.percentage} volumeMl={liveState.volume_ml} bagSizeMl={liveState.bag_size_ml} />

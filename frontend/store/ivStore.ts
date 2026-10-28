@@ -5,7 +5,7 @@
  */
 
 import { create } from 'zustand';
-import { TelemetryState, WSMessage, FlowStatus, AlarmPriority } from '../types';
+import { TelemetryState, WSMessage, FlowStatus, AlarmPriority, NodeAlert } from '../types';
 import { WS_URL, API } from '../constants/config';
 
 export type SortMode = 'urgency' | 'eta' | 'room';
@@ -14,6 +14,9 @@ export type FilterMode = 'all' | 'low_volume' | 'no_flow' | 'offline' | 'search'
 interface IVStore {
   // Live state map: sensor_id → TelemetryState
   ivMap: Record<string, TelemetryState>;
+
+  // Device alerts from ESP32 nodes (keyed by sensor_id for deduplication)
+  nodeAlerts: Record<string, NodeAlert[]>;
 
   // WebSocket
   wsConnected: boolean;
@@ -64,6 +67,7 @@ const PRIORITY_RANK: Record<AlarmPriority, number> = {
 
 export const useIVStore = create<IVStore>((set, get) => ({
   ivMap: {},
+  nodeAlerts: {},
   wsConnected: false,
   wsRetryCount: 0,
   sortMode: 'urgency',
@@ -141,6 +145,39 @@ export const useIVStore = create<IVStore>((set, get) => ({
 
         } else if (msg.type === 'BAG_REPLACED') {
           // State will refresh on next telemetry tick
+        } else if (msg.type === 'SESSION_ENDED') {
+          // Remove IV from live map when another user ends the session
+          const sensorId = msg.data.sensor_id;
+          if (sensorId && ivMap[sensorId]) {
+            const newMap = { ...ivMap };
+            delete newMap[sensorId];
+            const { nodeAlerts } = get();
+            const newAlerts = { ...nodeAlerts };
+            delete newAlerts[sensorId];
+            set({ ivMap: newMap, nodeAlerts: newAlerts });
+          }
+        } else if (msg.type === 'NODE_ALERTS') {
+          // Store device alerts (battery, power, node status) keyed by sensor_id.
+          // Deduplicate: only update state when alert content actually changes,
+          // preventing re-renders from repeated identical messages every tick.
+          const { nodeAlerts } = get();
+          const target = Object.values(ivMap).find((s) => s.room_bed === msg.bedId);
+          if (target) {
+            const existing = nodeAlerts[target.sensor_id];
+            const newAlerts = msg.alerts;
+            const isUnchanged =
+              existing &&
+              existing.length === newAlerts.length &&
+              existing.every(
+                (a, i) =>
+                  a.type === newAlerts[i].type &&
+                  a.severity === newAlerts[i].severity &&
+                  a.message === newAlerts[i].message
+              );
+            if (!isUnchanged) {
+              set({ nodeAlerts: { ...nodeAlerts, [target.sensor_id]: newAlerts } });
+            }
+          }
         }
       } catch {
         // Ignore malformed messages

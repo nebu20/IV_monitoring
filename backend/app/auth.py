@@ -44,7 +44,6 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
     to_encode["exp"] = expire
     return jwt.encode(to_encode, settings.SECRET_KEY, algorithm=ALGORITHM)
 
-
 def decode_token(token: str) -> dict:
     try:
         return jwt.decode(token, settings.SECRET_KEY, algorithms=[ALGORITHM])
@@ -88,6 +87,64 @@ async def get_current_user(
     user = result.scalars().first()
     if user is None:
         raise HTTPException(status_code=401, detail="User not found")
+
+    # Token-version check: reject tokens that lack a tv claim or carry a
+    # stale version.  All tokens issued after Phase 1 hardening include tv,
+    # so the absence of tv is itself a rejection signal.
+    token_ver = payload.get("tv")
+    user_ver = user.token_version if user.token_version is not None else 1
+    if token_ver is None or token_ver != user_ver:
+        raise HTTPException(
+            status_code=401,
+            detail="Session invalidated. Please log in again.",
+        )
+
+    # Force-change check: block normal endpoints if a password change is required.
+    if user.must_change_password:
+        raise HTTPException(
+            status_code=403,
+            detail="Password change required before accessing this resource. "
+                   "Use POST /api/users/force-change-password.",
+        )
+
+    return user
+
+
+async def get_current_user_allow_force_change(
+    token: Optional[str] = Depends(oauth2_scheme),
+    access_token: Optional[str] = Cookie(default=None),
+    db: AsyncSession = Depends(get_db),
+) -> User:
+    """
+    Like get_current_user but does NOT block users flagged for a forced
+    password change.  Used only by the force-change-password endpoint itself
+    so the user can authenticate and complete the required action.
+    """
+    raw_token = token or access_token
+    if not raw_token:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    payload = decode_token(raw_token)
+    username: str = payload.get("sub", "")
+    if not username:
+        raise HTTPException(status_code=401, detail="Invalid token payload")
+
+    result = await db.execute(
+        select(User).where(User.username == username, User.active == True)
+    )
+    user = result.scalars().first()
+    if user is None:
+        raise HTTPException(status_code=401, detail="User not found")
+
+    # Token-version check: same rule as get_current_user — tv is required.
+    token_ver = payload.get("tv")
+    user_ver = user.token_version if user.token_version is not None else 1
+    if token_ver is None or token_ver != user_ver:
+        raise HTTPException(
+            status_code=401,
+            detail="Session invalidated. Please log in again.",
+        )
+
     return user
 
 

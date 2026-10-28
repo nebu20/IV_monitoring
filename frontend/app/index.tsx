@@ -43,6 +43,7 @@ export default function DashboardScreen() {
     setSortMode, setFilterMode, setSearchQuery,
     getSortedFiltered, getSummaryBar, hasUnacknowledgedCritical,
     acknowledgeAlarm, confirmNewBag, dismissNewBagModal,
+    nodeAlerts,
   } = useIVStore();
 
   const [refreshing, setRefreshing] = useState(false);
@@ -140,6 +141,7 @@ export default function DashboardScreen() {
     <View style={{ flex: 1, margin: Spacing.sm / 2 }}>
       <PatientCard
         state={item}
+        nodeAlerts={nodeAlerts[item.sensor_id]}
         onAcknowledge={acknowledgeAlarm}
         onDetails={(ivId) => router.push(`/details/${ivId}`)}
         onEndSession={
@@ -220,6 +222,13 @@ export default function DashboardScreen() {
                 >
                   <Ionicons name="time-outline" size={14} color={theme.text.secondary} />
                   <Text style={[styles.actionBtnText, { color: theme.text.secondary }]}>History</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.actionBtn, { borderColor: theme.status.advisoryBorder, backgroundColor: theme.status.advisoryBg }]}
+                  onPress={() => router.push('/medications')}
+                >
+                  <Ionicons name="medkit-outline" size={14} color={theme.status.advisory} />
+                  <Text style={[styles.actionBtnText, { color: theme.status.advisory }]}>Meds</Text>
                 </TouchableOpacity>
               </>
             )}

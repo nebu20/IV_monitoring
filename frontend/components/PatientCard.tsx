@@ -2,19 +2,20 @@ import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { formatDistanceToNow } from 'date-fns';
-import { TelemetryState, AlarmPriority } from '../types';
+import { TelemetryState, AlarmPriority, NodeAlert } from '../types';
 import { StatusBadge } from './StatusBadge';
 import { useTheme } from '../context/ThemeContext';
 import { Typography, Spacing, Radius } from '../constants/theme';
 
 interface Props {
   state: TelemetryState;
+  nodeAlerts?: NodeAlert[];
   onAcknowledge: (ivId: string) => void;
   onDetails: (ivId: string) => void;
   onEndSession?: (ivId: string) => void;
 }
 
-export function PatientCard({ state, onAcknowledge, onDetails, onEndSession }: Props) {
+export function PatientCard({ state, nodeAlerts, onAcknowledge, onDetails, onEndSession }: Props) {
   const { theme } = useTheme();
 
   const borderColor: Record<AlarmPriority, string> = {
@@ -88,7 +89,90 @@ export function PatientCard({ state, onAcknowledge, onDetails, onEndSession }: P
         <Metric theme={theme} icon="time-outline" value={state.eta_string}
           color={state.eta_string === 'ETA Unavailable' ? theme.status.critical : theme.status.normal} />
         <Metric theme={theme} icon="speedometer-outline" value={`Rx ${state.prescribed_rate_gtt_min}`} color={theme.text.muted} />
+        {state.battery_level != null && (
+          <Metric
+            theme={theme}
+            icon={
+              state.power_source === 'BATTERY' && state.battery_level < 15
+                ? 'battery-dead-outline'
+                : state.power_source === 'BATTERY'
+                ? 'battery-half-outline'
+                : 'battery-charging-outline'
+            }
+            value={state.power_source === 'BATTERY' ? `BAT ${state.battery_level}%` : 'AC'}
+            color={
+              state.power_source === 'BATTERY' && state.battery_level < 15
+                ? theme.status.critical
+                : state.power_source === 'BATTERY'
+                ? theme.status.advisory
+                : theme.status.normal
+            }
+          />
+        )}
+        {state.node_status && state.node_status !== 'OK' && (
+          <Metric theme={theme} icon="warning-outline" value={state.node_status} color={theme.status.critical} />
+        )}
       </View>
+
+      {/* Node alert messages — shown only when ESP32 sends active alerts */}
+      {nodeAlerts && nodeAlerts.length > 0 && (
+        <View style={styles.nodeAlertRow}>
+          {nodeAlerts.map((alert, i) => (
+            <View
+              key={i}
+              style={[
+                styles.nodeAlertChip,
+                {
+                  backgroundColor:
+                    alert.severity === 'CRITICAL'
+                      ? theme.status.criticalBg
+                      : alert.severity === 'HIGH'
+                      ? theme.status.highBg
+                      : theme.status.advisoryBg,
+                  borderColor:
+                    alert.severity === 'CRITICAL'
+                      ? theme.status.criticalBorder
+                      : alert.severity === 'HIGH'
+                      ? theme.status.highBorder
+                      : theme.status.advisoryBorder,
+                },
+              ]}
+            >
+              <Ionicons
+                name={
+                  alert.severity === 'CRITICAL'
+                    ? 'alert-circle-outline'
+                    : 'warning-outline'
+                }
+                size={11}
+                color={
+                  alert.severity === 'CRITICAL'
+                    ? theme.status.critical
+                    : alert.severity === 'HIGH'
+                    ? theme.status.high
+                    : theme.status.advisory
+                }
+              />
+              <Text
+                style={[
+                  styles.nodeAlertText,
+                  {
+                    color:
+                      alert.severity === 'CRITICAL'
+                        ? theme.status.critical
+                        : alert.severity === 'HIGH'
+                        ? theme.status.high
+                        : theme.status.advisory,
+                  },
+                ]}
+                numberOfLines={1}
+              >
+                {alert.message}
+              </Text>
+            </View>
+          ))}
+        </View>
+      )}
 
       {/* Footer */}
       <View style={styles.footer}>
@@ -163,4 +247,7 @@ const styles = StyleSheet.create({
   btnRow: { flexDirection: 'row', gap: 5 },
   btn: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8, paddingVertical: 4, borderRadius: Radius.sm, borderWidth: 1, gap: 3 },
   btnTxt: { fontSize: 11, fontWeight: '600' },
+  nodeAlertRow: { flexDirection: 'column', gap: 3 },
+  nodeAlertChip: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 6, paddingVertical: 3, borderRadius: Radius.sm, borderWidth: 1, gap: 4 },
+  nodeAlertText: { fontSize: 10, fontWeight: '600', flex: 1 },
 });

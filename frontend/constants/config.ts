@@ -22,4 +22,11 @@ export const API = {
   NODE_TELEMETRY: `${BASE_URL}/api/node/telemetry`,
   NODE_CONFIG:    (bedId: string) => `${BASE_URL}/api/node/config/${bedId}`,
   LIVE_STATUS:    `${BASE_URL}/api/beds/live-status`,
+
+  // Medications
+  MED_SCHEDULES:  `${BASE_URL}/api/medications/schedules`,
+  MED_SCHEDULE:   (id: number) => `${BASE_URL}/api/medications/schedules/${id}`,
+  MED_DUE:        `${BASE_URL}/api/medications/due`,
+  MED_ENSURE:     `${BASE_URL}/api/medications/doses/ensure`,
+  MED_HISTORY:    (cardId: string) => `${BASE_URL}/api/medications/history/${cardId}`,
 };
